@@ -1,0 +1,412 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: demo-setup
+  namespace: {{.Values.username}} 
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: demo-setup-edit
+  namespace: {{.Values.username}} 
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edit
+subjects:
+- kind: ServiceAccount
+  name: demo-setup
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: demo-setup-route-reader-binding-{{.Values.username}} 
+subjects:
+- kind: ServiceAccount
+  name: demo-setup
+  namespace: {{.Values.username}} 
+roleRef:
+  kind: ClusterRole
+  name: route-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: elyra-pipelines-{{.Values.workbench}}
+  namespace: {{.Values.username}} 
+  labels:
+    opendatahub.io/dashboard: 'true'
+subjects:
+  - kind: ServiceAccount
+    name: {{.Values.workbench}}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ds-pipeline-user-access-dspa
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  annotations:
+    openshift.io/description: ''
+    openshift.io/display-name: My Workbench
+    volume.beta.kubernetes.io/storage-provisioner: openshift-storage.rbd.csi.ceph.com
+    volume.kubernetes.io/storage-provisioner: openshift-storage.rbd.csi.ceph.com
+  name: {{.Values.workbench}}
+  namespace: {{.Values.username}} 
+  finalizers:
+    - kubernetes.io/pvc-protection
+  labels:
+    opendatahub.io/dashboard: 'true'
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: ocs-external-storagecluster-ceph-rbd
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-connection-shared-minio---pipelines
+  namespace: {{.Values.username}} 
+  labels:
+    opendatahub.io/dashboard: "true"
+    opendatahub.io/managed: "true"
+  annotations:
+    opendatahub.io/connection-type: s3
+    openshift.io/display-name: Shared Minio - pipelines
+type: Opaque
+stringData:
+  AWS_ACCESS_KEY_ID: {{.Values.minio.user}} 
+  AWS_SECRET_ACCESS_KEY: {{.Values.minio.pass}} 
+  AWS_DEFAULT_REGION: us
+  AWS_S3_ENDPOINT: {{ .Values.minio.route_prefix }}.{{ .Values.subdomain }}
+  AWS_S3_BUCKET: {{.Values.username}}
+---
+apiVersion: datasciencepipelinesapplications.opendatahub.io/v1
+kind: DataSciencePipelinesApplication
+metadata:
+  finalizers:
+  - datasciencepipelinesapplications.opendatahub.io/finalizer
+  name: dspa
+  namespace: {{.Values.username}}
+spec:
+  apiServer:
+    caBundleFileMountPath: ''
+    caBundleFileName: ''
+    deploy: true
+    artifactSignedURLExpirySeconds: 60
+    enableSamplePipeline: false
+    managedPipelines: {}
+    enableOauth: true
+    cacheEnabled: true
+    pipelineStore: kubernetes
+  database:
+    disableHealthCheck: false
+    mariaDB:
+      deploy: true
+      pipelineDBName: mlpipeline
+      pvcSize: 10Gi
+      username: mlpipeline
+  dspVersion: v2
+  objectStorage:
+    disableHealthCheck: false
+    enableExternalRoute: false
+    externalStorage:
+      basePath: ''
+      bucket: {{.Values.username}}
+      host: {{ .Values.minio.route_prefix }}.{{ .Values.subdomain }}
+      port: ''
+      region: us
+      s3CredentialsSecret:
+        accessKey: AWS_ACCESS_KEY_ID
+        secretKey: AWS_SECRET_ACCESS_KEY
+        secretName: aws-connection-shared-minio---pipelines
+      scheme: https
+      #secure: true
+  persistenceAgent:
+    deploy: true
+    numWorkers: 2
+  podToPodTLS: true
+  scheduledWorkflow:
+    cronScheduleTimezone: UTC
+    deploy: true
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: {{.Values.username}}
+spec:
+  ingress:
+  - from:
+    - podSelector: {}
+  podSelector: {}
+  policyTypes:
+  - Ingress
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ds-pipeline-config
+  namespace: {{.Values.username}}
+stringData:
+  odh_dsp.json: '{"display_name": "Data Science Pipeline", "metadata": {"tags": [],
+    "display_name": "Data Science Pipeline", "engine": "$PIPELINE_ENGINE", "auth_type": "KUBERNETES_SERVICE_ACCOUNT_TOKEN",
+    "api_endpoint": "\$PIPELINE_ROUTE",
+    "public_api_endpoint": "$DASHBOARD_ROUTE/experiments/{{.Values.username}}",
+    "cos_auth_type": "KUBERNETES_SECRET", "cos_secret": "aws-connection-shared-minio---pipelines",
+    "cos_endpoint": "{{.Values.minio.host}}", "cos_bucket": "{{.Values.username}}",
+    "cos_username": "{{.Values.minio.user}}", "cos_password": "{{.Values.minio.pass}}",
+    "runtime_type": "KUBEFLOW_PIPELINES"}, "schema_name": "kfp"}'
+type: Opaque
+---
+apiVersion: kubeflow.org/v1
+kind: Notebook
+metadata:
+  annotations:
+    opendatahub.io/image-display-name: CUSTOM - Parasol RAG Workbench
+    openshift.io/description: ''
+    openshift.io/display-name: {{.Values.workbench}}
+    notebooks.opendatahub.io/last-image-version-git-commit-selection: ''
+    notebooks.opendatahub.io/last-image-selection: 'ic-workbench:1.2'
+    opendatahub.io/hardware-profile-namespace: redhat-ods-applications
+    opendatahub.io/username: {{.Values.username}}
+    opendatahub.io/hardware-profile-name: default-profile
+    opendatahub.io/connections: ''
+    notebooks.opendatahub.io/inject-auth: 'true'
+    opendatahub.io/workbench-image-namespace: ''
+  name: {{.Values.workbench}}
+  creationTimestamp: '2026-02-19T15:22:30Z'
+  namespace: {{.Values.username}}
+  finalizers:
+    - notebook.opendatahub.io/httproute-cleanup
+    - notebook.opendatahub.io/referencegrant-cleanup
+    - notebook.opendatahub.io/kube-rbac-proxy-cleanup
+  labels:
+    app: {{.Values.workbench}}
+    opendatahub.io/dashboard: 'true'
+    opendatahub.io/odh-managed: 'true'
+    opendatahub.io/user: {{.Values.username}}
+spec:
+  template:
+    spec:
+      containers:
+        - resources:
+            limits:
+              cpu: '2'
+              memory: 8Gi
+            requests:
+              cpu: '1'
+              memory: 6Gi
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /notebook/{{.Values.username}}/{{.Values.workbench}}/api
+              port: notebook-port
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 1
+          name: {{.Values.workbench}}
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /notebook/{{.Values.username}}/{{.Values.workbench}}/api
+              port: notebook-port
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 1
+          env:
+            - name: NOTEBOOK_ARGS
+              value: |-
+                --ServerApp.port=8888
+                                  --ServerApp.token=''
+                                  --ServerApp.password=''
+                                  --ServerApp.base_url=/notebook/{{.Values.username}}/{{.Values.workbench}}
+                                  --ServerApp.quit_button=False
+            - name: JUPYTER_IMAGE
+              value: 'image-registry.openshift-image-registry.svc:5000/redhat-ods-applications/ic-workbench:1.2'
+            - name: PIP_CERT
+              value: /etc/pki/tls/custom-certs/ca-bundle.crt
+            - name: REQUESTS_CA_BUNDLE
+              value: /etc/pki/tls/custom-certs/ca-bundle.crt
+            - name: SSL_CERT_FILE
+              value: /etc/pki/tls/custom-certs/ca-bundle.crt
+            - name: PIPELINES_SSL_SA_CERTS
+              value: /etc/pki/tls/custom-certs/ca-bundle.crt
+            - name: KF_PIPELINES_SSL_SA_CERTS
+              value: /etc/pki/tls/custom-certs/ca-bundle.crt
+            - name: GIT_SSL_CAINFO
+              value: /etc/pki/tls/custom-certs/ca-bundle.crt
+          ports:
+            - containerPort: 8888
+              name: notebook-port
+              protocol: TCP
+          imagePullPolicy: Always
+          volumeMounts:
+            - mountPath: /opt/app-root/src/
+              name: {{.Values.workbench}}-storage
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /etc/pki/tls/custom-certs/ca-bundle.crt
+              name: trusted-ca
+              readOnly: true
+              subPath: ca-bundle.crt
+            - mountPath: /opt/app-root/pipeline-runtimes/
+              name: runtime-images
+          image: 'image-registry.openshift-image-registry.svc:5000/redhat-ods-applications/ic-workbench:1.2'
+          workingDir: /opt/app-root/src
+        - resources:
+            limits:
+              cpu: 100m
+              memory: 64Mi
+            requests:
+              cpu: 100m
+              memory: 64Mi
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz
+              port: 8444
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 1
+          name: kube-rbac-proxy
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz
+              port: 8444
+              scheme: HTTPS
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 1
+          ports:
+            - containerPort: 8443
+              name: kube-rbac-proxy
+              protocol: TCP
+          imagePullPolicy: Always
+          volumeMounts:
+            - mountPath: /etc/kube-rbac-proxy
+              name: kube-rbac-proxy-config
+            - mountPath: /etc/tls/private
+              name: kube-rbac-proxy-tls-certificates
+          image: 'registry.redhat.io/rhoai/odh-kube-auth-proxy-rhel9@sha256:1f4b2b9bb5061faf17299c2ae2405ab408e2b7ce349d9831eb6045990e6da005'
+          args:
+            - '--secure-listen-address=0.0.0.0:8443'
+            - '--upstream=http://127.0.0.1:8888/'
+            - '--logtostderr=true'
+            - '--v=10'
+            - '--proxy-endpoints-port=8444'
+            - '--config-file=/etc/kube-rbac-proxy/config-file.yaml'
+            - '--tls-cert-file=/etc/tls/private/tls.crt'
+            - '--tls-private-key-file=/etc/tls/private/tls.key'
+            - '--auth-header-fields-enabled=true'
+            - '--auth-header-user-field-name=X-Auth-Request-User'
+            - '--auth-header-groups-field-name=X-Auth-Request-Groups'
+      enableServiceLinks: false
+      serviceAccountName: {{.Values.workbench}}
+      volumes:
+        - name: {{.Values.workbench}}-storage
+          persistentVolumeClaim:
+            claimName: {{.Values.workbench}}
+        - name: elyra-dsp-details
+          secret:
+            secretName: ds-pipeline-config
+        - emptyDir:
+            medium: Memory
+          name: shm
+        - configMap:
+            items:
+              - key: ca-bundle.crt
+                path: ca-bundle.crt
+            name: workbench-trusted-ca-bundle
+            optional: true
+          name: trusted-ca
+        - configMap:
+            name: pipeline-runtime-images
+            optional: true
+          name: runtime-images
+        - configMap:
+            defaultMode: 420
+            name: {{.Values.workbench}}-kube-rbac-proxy-config
+          name: kube-rbac-proxy-config
+        - name: kube-rbac-proxy-tls-certificates
+          secret:
+            defaultMode: 420
+            secretName: {{.Values.workbench}}-kube-rbac-proxy-tls
+  readyReplicas: 1
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: clone-repo
+  namespace: {{.Values.username}}
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      serviceAccount: demo-setup
+      serviceAccountName: demo-setup
+      initContainers:
+      - name: wait-for-workbench
+        image: image-registry.openshift-image-registry.svc:5000/openshift/tools:latest
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/bash"]
+        args:
+        - -ec
+        - |-
+          echo -n "Waiting for workbench pod in {{ .Values.username }} namespace"
+          while [ -z "$(oc get pods -n {{ .Values.username }} -l app={{ .Values.workbench }} -o custom-columns=STATUS:.status.phase --no-headers | grep Running 2>/dev/null)" ]; do
+              echo -n '.'
+              sleep 1
+          done
+          echo "Workbench pod is running in {{ .Values.username }} namespace"
+      containers:
+      - name: git-clone
+        image: image-registry.openshift-image-registry.svc:5000/openshift/tools:latest
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/bash"]
+        args:
+        - -ec
+        - |-
+          pod_name=$(oc get pods --selector=app={{ .Values.workbench }} -o jsonpath='{{"{"}}.items[0].metadata.name{{"}"}}') && oc exec $pod_name -- bash -c "git clone {{.Values.repo}}"
+      restartPolicy: Never
+---
+# Create the Data Pipeline PVC
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  annotations:
+    openshift.io/description: ''
+    openshift.io/display-name: Data Pipeline
+    volume.beta.kubernetes.io/storage-provisioner: openshift-storage.cephfs.csi.ceph.com
+    volume.kubernetes.io/storage-provisioner: openshift-storage.cephfs.csi.ceph.com
+  name: processing-pipeline-storage
+  namespace: {{.Values.username}}
+  finalizers:
+    - kubernetes.io/pvc-protection
+  labels:
+    opendatahub.io/dashboard: 'true'
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: ocs-external-storagecluster-cephfs
+  volumeMode: Filesystem
+

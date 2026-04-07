@@ -1,0 +1,10 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rag-pipeline-workshop
+  labels:
+    app: rag-pipeline-workshop
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    openshift.io/display-name: "RAG Pipeline"

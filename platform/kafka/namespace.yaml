@@ -1,0 +1,10 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kafka
+  labels:
+    app: kafka
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    openshift.io/display-name: "Kafka cluster"

@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-event-bridge
+  namespace: rag-pipeline-workshop
+  labels:
+    app: minio-event-bridge
+    app.kubernetes.io/part-of: rag-pipeline
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: minio-event-bridge-tls
+    argocd.argoproj.io/sync-wave: "6"
+    argocd.argoproj.io/hook: Sync
+spec:
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  selector:
+    app: minio-event-bridge

@@ -1,0 +1,61 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{.Values.username}}
+  labels:
+    opendatahub.io/dashboard: 'true'
+  annotations:
+    openshift.io/description: "Workspace Namespace"
+    openshift.io/display-name: "Workspace"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{.Values.workbench}} 
+  namespace: {{.Values.username}} 
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: admin-{{.Values.username}}
+  namespace: {{.Values.username}}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: User
+  name: {{.Values.username}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: view-{{.Values.username}}-rag
+  namespace: rag-pipeline-workshop
+subjects:
+- kind: User
+  name: {{.Values.username}}
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: view
+  apiGroup: rbac.authorization.k8s.io
+---
+# Grant the shared kfp-trigger-sa (from rag-pipeline-workshop) access to this user's
+# DSPA pipeline server. This enables the event-driven pipeline trigger to dynamically
+# route S3 events to per-user pipeline runs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kfp-trigger-sa-access
+  namespace: {{.Values.username}}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+subjects:
+- kind: ServiceAccount
+  name: kfp-trigger-sa
+  namespace: rag-pipeline-workshop

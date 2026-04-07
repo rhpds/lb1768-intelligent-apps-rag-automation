@@ -1,0 +1,48 @@
+# Job to restart MinIO after all event-driven components are deployed.
+#
+# MinIO marks webhook notification targets as offline if they are unreachable
+# at startup.  Since the minio-event-bridge (sync wave 6) deploys after MinIO
+# (sync wave 2), the webhook target is always offline on first boot.
+#
+# This Job runs at sync wave 11 (after setup-minio at wave 10) and performs a
+# rollout restart so MinIO reconnects to the now-available webhook endpoint.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-restart-placeholder
+  namespace: minio
+  generateName: minio-restart-
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "11"
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      serviceAccountName: minio-manage
+      restartPolicy: Never
+      containers:
+        - name: restart-minio
+          image: registry.redhat.io/openshift4/ose-cli:latest
+          command:
+            - "/bin/sh"
+            - "-c"
+            - |
+              set -e
+              echo "--- Restarting MinIO to re-establish webhook connections ---"
+
+              # Wait for the event bridge to be ready before restarting
+              echo "Checking minio-event-bridge availability..."
+              until curl -sf http://minio-event-bridge.rag-pipeline-workshop.svc.cluster.local:8080/health > /dev/null 2>&1; do
+                echo "Event bridge not ready yet, waiting 5s..."
+                sleep 5
+              done
+              echo "Event bridge is ready."
+
+              # Perform rollout restart
+              oc rollout restart deployment/minio -n minio
+              echo "Waiting for rollout to complete..."
+              oc rollout status deployment/minio -n minio --timeout=120s
+
+              echo "--- MinIO restart completed. Webhook should now be active. ---"

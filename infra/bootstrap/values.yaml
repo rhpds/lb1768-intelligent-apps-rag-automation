@@ -1,0 +1,3 @@
+bootstrap:
+  repoURL: https://github.com/rhpds/lb1768-intelligent-apps-rag-automation
+  targetRevision: main

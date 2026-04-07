@@ -1,0 +1,96 @@
+# DaemonSet to pre-pull large workshop images onto every node.
+#
+# This prevents CRI-O race conditions when multiple users pull the same large
+# image concurrently (with serializeImagePulls: false, parallel pull RPCs for
+# the same image can get lost, leaving pods stuck in ContainerCreating forever).
+#
+# Each image runs as an init container that exits immediately after the pull,
+# keeping the pod in a minimal "Running" state with a pause container so the
+# DaemonSet controller stays satisfied.
+#
+# Sync wave 3 — runs early alongside MinIO so images are cached well before
+# any user workload needs them.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: prepull-workshop-images
+  namespace: minio
+  labels:
+    app: prepull-workshop-images
+    app.kubernetes.io/instance: cluster-bootstrap
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  selector:
+    matchLabels:
+      app: prepull-workshop-images
+  template:
+    metadata:
+      labels:
+        app: prepull-workshop-images
+    spec:
+      # Tolerate all taints so images are pulled on control-plane and worker nodes
+      tolerations:
+        - operator: Exists
+      initContainers:
+        - name: pull-docling
+          image: quay.io/cnuland/docling-pipeline:latest
+          command: ["echo", "Image pulled successfully"]
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+        - name: pull-workbench
+          image: image-registry.openshift-image-registry.svc:5000/redhat-ods-applications/ic-workbench:1.2
+          command: ["echo", "Image pulled successfully"]
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+        - name: pull-rag-json-pipeline
+          image: quay.io/cnuland/hello-chris-rag-json-pipeline:latest
+          command: ["echo", "Image pulled successfully"]
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+        - name: pull-mock-api
+          image: quay.io/cnuland/hello-chris-rag-pipeline:latest
+          command: ["echo", "Image pulled successfully"]
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+        - name: pull-milvus
+          image: quay.io/rh-data-services/milvus-openshift:v2.3.10
+          command: ["echo", "Image pulled successfully"]
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+      containers:
+        - name: pause
+          image: registry.access.redhat.com/ubi9-micro:latest
+          command: ["sleep", "infinity"]
+          resources:
+            requests:
+              cpu: "1m"
+              memory: "8Mi"
+            limits:
+              cpu: "10m"
+              memory: "16Mi"

@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vectordb-etcd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  labels:
+    app.kubernetes.io/name: etcd
+    app.kubernetes.io/instance: vectordb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: etcd
+      app.kubernetes.io/instance: vectordb
+  serviceName: vectordb-etcd-headless
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: etcd
+        app.kubernetes.io/instance: vectordb
+    spec:
+      serviceAccountName: default
+      containers:
+        - name: etcd
+          image: docker.io/milvusdb/etcd:3.5.5-r4
+          imagePullPolicy: "IfNotPresent"
+          env:
+            - name: ALLOW_NONE_AUTHENTICATION
+              value: "yes"
+          ports:
+            - name: client
+              containerPort: 2379
+            - name: peer
+              containerPort: 2380
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/etcd
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: "8Gi"
+
+--- 
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vectordb-milvus-standalone
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  labels:
+    app.kubernetes.io/name: milvus
+    app.kubernetes.io/instance: vectordb
+    component: "standalone"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: milvus
+      app.kubernetes.io/instance: vectordb
+      component: "standalone"
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: milvus
+        app.kubernetes.io/instance: vectordb
+        component: "standalone"
+    spec:
+      serviceAccountName: default
+      initContainers:
+        # This init container copies helper scripts into a shared volume.
+        - name: config
+          command:
+            - /cp
+            - /run-helm.sh,/merge
+            - /milvus/tools/run-helm.sh,/milvus/tools/merge
+          image: "milvusdb/milvus-config-tool:v0.1.2"
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - mountPath: /milvus/tools
+              name: tools
+      containers:
+        - name: standalone
+          image: "quay.io/rh-data-services/milvus-openshift:v2.3.10"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MINIO_ACCESS_KEY 
+              valueFrom:
+                secretKeyRef:
+                  name: milvus-minio-secret
+                  key: MINIO_ACCESS_KEY
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: milvus-minio-secret
+                  key: MINIO_SECRET_KEY
+          # CORRECTED: Use the run-helm.sh script to start Milvus.
+          args: ["/milvus/tools/run-helm.sh", "milvus", "run", "standalone"]
+          ports:
+            - name: milvus
+              containerPort: 19530
+              protocol: TCP
+            - name: metrics
+              containerPort: 9091
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 120
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 120
+            periodSeconds: 10
+          volumeMounts:
+            - mountPath: /milvus/tools
+              name: tools
+            - name: milvus-config
+              mountPath: /milvus/configs/user.yaml
+              subPath: user.yaml
+              readOnly: true
+            - name: milvus-data-disk
+              mountPath: "/var/lib/milvus"
+      volumes:
+        - name: tools
+          emptyDir: {}
+        - name: milvus-config
+          configMap:
+            name: vectordb-milvus
+        - name: milvus-data-disk
+          persistentVolumeClaim:
+            claimName: vectordb-milvus

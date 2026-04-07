@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vectordb-milvus
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  labels:
+    app.kubernetes.io/name: milvus
+    app.kubernetes.io/instance: vectordb
+data:
+  user.yaml: |
+    # This configuration tells Milvus to use the external etcd StatefulSet.
+    etcd:
+      endpoints:
+        - vectordb-etcd-headless:2379
+    # Internal components still use localhost as they are in the same pod.
+    minio:
+      address: minio.minio.svc.cluster.local:9000
+      accessKeyID: minio
+      secretAccessKey: minio123
+      useSSL: false
+      bucketName: milvus
+    common:
+      rootCoord:
+        address: localhost:53100
+      dataCoord:
+        address: localhost:13333
+      queryCoord:
+        address: localhost:19531
+      indexCoord:
+        address: localhost:31000
+  default.yaml: |
+    {}

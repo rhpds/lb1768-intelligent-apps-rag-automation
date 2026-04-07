@@ -1,0 +1,6 @@
+apiVersion: v2
+name: infra-bootstrap
+description: Infra app-of-apps - cluster-level components for RAG workshop
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
