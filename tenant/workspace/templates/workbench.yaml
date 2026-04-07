@@ -347,7 +347,6 @@ spec:
           secret:
             defaultMode: 420
             secretName: {{.Values.workbench}}-kube-rbac-proxy-tls
-  readyReplicas: 1
 
 ---
 apiVersion: batch/v1
