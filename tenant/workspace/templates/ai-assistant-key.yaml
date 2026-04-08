@@ -1,0 +1,48 @@
+{{- if .Values.litellmKey }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: demo-setup-ai-assistant-edit-{{ .Values.username }}
+  namespace: showroom-ai-assistant
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edit
+subjects:
+- kind: ServiceAccount
+  name: demo-setup
+  namespace: {{ .Values.username }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: patch-ai-assistant-key-{{ .Values.username }}
+  namespace: {{ .Values.username }}
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      serviceAccount: demo-setup
+      serviceAccountName: demo-setup
+      containers:
+      - name: patch-secret
+        image: image-registry.openshift-image-registry.svc:5000/openshift/tools:latest
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/bash"]
+        args:
+        - -ec
+        - |-
+          echo "Patching showroom-ai-assistant secret with LiteLLM key..."
+          if oc get secret showroom-ai-assistant-secrets -n showroom-ai-assistant 2>/dev/null; then
+            oc patch secret showroom-ai-assistant-secrets -n showroom-ai-assistant \
+              --type='json' \
+              -p='[{"op":"replace","path":"/data/VLLM_API_TOKEN","value":"'$(echo -n "{{ .Values.litellmKey }}" | base64)'"}]'
+            echo "Secret patched. Restarting AI assistant deployment..."
+            oc rollout restart deployment/showroom-ai-assistant -n showroom-ai-assistant
+            echo "Done."
+          else
+            echo "AI assistant secret not found, skipping."
+          fi
+      restartPolicy: Never
+{{- end }}

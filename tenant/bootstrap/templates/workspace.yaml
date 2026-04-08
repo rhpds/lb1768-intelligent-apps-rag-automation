@@ -16,6 +16,7 @@ spec:
       values: |
         username: {{ .Values.tenant.username }}
         subdomain: {{ .Values.tenant.domain }}
+        litellmKey: {{ .Values.tenant.litellmKey }}
   destination:
     name: in-cluster
     namespace: {{ .Values.tenant.username }}

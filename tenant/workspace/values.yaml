@@ -10,6 +10,8 @@ repo: https://github.com/cnuland/hello-chris-rag-pipeline.git
 
 subdomain: apps.cluster-guid.sandbox.opentlc.com
 
+litellmKey: ""
+
 minio:
   user: minio
   pass: minio123
