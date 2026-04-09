@@ -1,0 +1,42 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-minio-bucket-{{ .Values.username }}
+  namespace: {{ .Values.username }}
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      serviceAccount: demo-setup
+      serviceAccountName: demo-setup
+      restartPolicy: Never
+      containers:
+      - name: create-bucket
+        image: minio/mc:latest
+        imagePullPolicy: IfNotPresent
+        command:
+          - "/bin/sh"
+          - "-c"
+          - |
+            set -e
+            MC_CONFIG_DIR="/tmp/.mc"
+            BUCKET_NAME="{{ .Values.username }}-pdf-inbox"
+            WEBHOOK_ARN="arn:minio:sqs::RAG:webhook"
+
+            echo "Waiting for MinIO service..."
+            until mc --config-dir ${MC_CONFIG_DIR} alias set myminio http://{{ .Values.minio.host }} {{ .Values.minio.user }} {{ .Values.minio.pass }}; do
+              echo "MinIO not ready, retrying in 10s..."
+              sleep 10
+            done
+
+            echo "Creating bucket '${BUCKET_NAME}'..."
+            mc --config-dir ${MC_CONFIG_DIR} mb myminio/${BUCKET_NAME} --ignore-existing
+
+            echo "Adding webhook event notification for PDF uploads..."
+            mc --config-dir ${MC_CONFIG_DIR} event add myminio/${BUCKET_NAME} "${WEBHOOK_ARN}" --event "put" --suffix ".pdf" --ignore-existing
+
+            echo "Verifying:"
+            mc --config-dir ${MC_CONFIG_DIR} event list myminio/${BUCKET_NAME}
+
+            echo "Bucket '${BUCKET_NAME}' created and configured."
