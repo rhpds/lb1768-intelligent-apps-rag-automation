@@ -4,3 +4,4 @@ kind: Kustomization
 
 resources:
   - image-prepull.yaml
+  - prepull-watchdog.yaml
