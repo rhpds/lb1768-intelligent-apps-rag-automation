@@ -32,6 +32,10 @@ spec:
       # Tolerate all taints so images are pulled on control-plane and worker nodes
       tolerations:
         - operator: Exists
+      # Kill pods stuck in image pull after 15 minutes so the DaemonSet
+      # recreates them with less contention (the 10 GB docling image can
+      # cause silent cri-o retries on EOF when all nodes pull at once).
+      activeDeadlineSeconds: 900
       initContainers:
         - name: pull-docling
           image: quay.io/cnuland/docling-pipeline:latest
