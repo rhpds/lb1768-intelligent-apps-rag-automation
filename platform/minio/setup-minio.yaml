@@ -27,8 +27,8 @@ spec:
       restartPolicy: Never
       containers:
       - name: minio-setup-container
-        # Use the official MinIO Client (mc) image.
-        image: minio/mc:latest
+        # Use the official MinIO Client (mc) image from Quay to avoid Docker Hub anonymous pull rate limits.
+        image: quay.io/minio/mc:latest
         # The command to execute. It's a shell script that performs all necessary setup steps.
         command:
           - "/bin/sh"
