@@ -364,6 +364,13 @@ spec:
       - name: wait-for-workbench
         image: image-registry.openshift-image-registry.svc:5000/openshift/tools:latest
         imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 256Mi
         command: ["/bin/bash"]
         args:
         - -ec
@@ -378,6 +385,13 @@ spec:
       - name: git-clone
         image: image-registry.openshift-image-registry.svc:5000/openshift/tools:latest
         imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 256Mi
         command: ["/bin/bash"]
         args:
         - -ec
