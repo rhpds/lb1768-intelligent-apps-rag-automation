@@ -34,7 +34,7 @@ spec:
         - operator: Exists
       initContainers:
         - name: pull-docling
-          image: quay.io/cnuland/docling-pipeline:latest
+          image: quay.io/cnuland/docling-pipeline:latest@sha256:08ba422d5d89f0eac457da5393daa8f818774e41d72babaddb75b0b450ef3f38
           command: ["echo", "Image pulled successfully"]
           resources:
             requests:
@@ -54,7 +54,7 @@ spec:
               cpu: "100m"
               memory: "64Mi"
         - name: pull-rag-json-pipeline
-          image: quay.io/cnuland/hello-chris-rag-json-pipeline:latest
+          image: quay.io/cnuland/hello-chris-rag-json-pipeline:latest@sha256:0a9bfc49a528ae34c4058e7d39005ff6eb3c90ea8c3aadfc08b30cc91d84ab02
           command: ["echo", "Image pulled successfully"]
           resources:
             requests:
@@ -64,7 +64,7 @@ spec:
               cpu: "100m"
               memory: "64Mi"
         - name: pull-mock-api
-          image: quay.io/cnuland/hello-chris-rag-pipeline:latest
+          image: quay.io/cnuland/hello-chris-rag-pipeline:latest@sha256:cea7b3885f63f9a851cdbeda07f8fa08e84a3add73c74ab52484342e5b6702e7
           command: ["echo", "Image pulled successfully"]
           resources:
             requests:
