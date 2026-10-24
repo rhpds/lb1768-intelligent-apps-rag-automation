@@ -7,6 +7,8 @@ username: user1
 workbench: my-workbench
 
 repo: https://github.com/cnuland/hello-chris-rag-pipeline.git
+# Commit cloned into the workbench; pinned so upstream pushes can't change the lab
+repoRef: 4427cc17c90578330378deb15ea939c4582d9964
 
 subdomain: apps.cluster-guid.sandbox.opentlc.com
 
